@@ -27,7 +27,6 @@
         appId: "1:999052757013:web:3f75bdbf48f921b831a61c"
       };
 
-      // Exact path where project data is managed
       const appId = 'c_97156435f4eefd8e_importer.html-977';
       
       const app = initializeApp(firebaseConfig);
@@ -39,10 +38,6 @@
       let userName = "";
       let selectedCandidate = null;
 
-      /**
-       * INITIALIZATION & AUTH
-       * Ensures authentication is complete before attempting any data reads.
-       */
       async function boot() {
         try {
           if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -65,10 +60,6 @@
 
       boot();
 
-      /**
-       * LIVE SYNC
-       * Listens to the Admin Dashboard toggle to open/close voting instantly.
-       */
       function setupLiveSync() {
         const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'settings');
         onSnapshot(settingsRef, (snap) => {
@@ -86,10 +77,6 @@
         }, (err) => console.warn("Sync error:", err.code));
       }
 
-      /**
-       * DEVICE LOCK CHECK
-       * Uses the Firebase UID to verify if this specific device/browser has already voted.
-       */
       async function checkExistingVote() {
         if (!currentUser) return;
         try {
@@ -148,7 +135,6 @@
           btn.innerText = "SENDING...";
 
           try {
-            // Using UID as the document ID for strict device locking
             const voteRef = doc(db, 'artifacts', appId, 'public', 'data', 'online_votes', currentUser.uid);
             
             await setDoc(voteRef, {
@@ -203,7 +189,8 @@
             --glass: rgba(10, 10, 14, 0.98); 
             --border: rgba(255, 255, 255, 0.1);
             --accent: #0A84FF;
-            --gradient: linear-gradient(135deg, #0A84FF 0%, #BF5AF2 100%);
+            --accent-purple: #BF5AF2;
+            --gradient: linear-gradient(135deg, var(--accent) 0%, var(--accent-purple) 100%);
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
@@ -234,28 +221,43 @@
 
         .contestant-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
 
-        .vote-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; padding: 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.3s; user-select: none; }
-        .vote-btn.selected { background: rgba(255, 255, 255, 0.1); border-color: var(--accent); transform: scale(1.03); box-shadow: 0 0 30px rgba(10, 132, 255, 0.3); }
+        .vote-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; padding: 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); user-select: none; }
+        
+        /* GLOWING PULSE EFFECT */
+        .vote-btn.selected { 
+            background: rgba(255, 255, 255, 0.1); 
+            border-color: var(--accent); 
+            transform: scale(1.03); 
+            box-shadow: 0 0 30px rgba(10, 132, 255, 0.3);
+            animation: selectedGlowPulse 2.5s infinite ease-in-out;
+        }
+
+        @keyframes selectedGlowPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(10, 132, 255, 0.3); border-color: var(--accent); }
+            50% { box-shadow: 0 0 45px rgba(191, 90, 242, 0.6); border-color: var(--accent-purple); }
+        }
 
         .side-container { width: 40px; display: flex; align-items: center; }
         .side-container.end { justify-content: flex-end; }
 
-        .vote-btn .badge { width: 34px; height: 34px; border-radius: 12px; background: var(--gradient); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.95rem; color: white; }
+        .vote-btn .badge { width: 34px; height: 34px; border-radius: 12px; background: var(--gradient); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.95rem; color: white; box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3); }
 
         .contestant-info { flex: 1; text-align: center; }
         
-        /* High-Impact GGT Font for contestant names */
         .contestant-name { 
             font-weight: 900; 
             font-size: 1.1rem; 
             text-transform: uppercase; 
             letter-spacing: -0.04em; 
-            color: white; 
+            color: rgba(255,255,255,0.9); 
+            transition: 0.3s;
         }
+        .vote-btn.selected .contestant-name { color: white; text-shadow: 0 0 15px rgba(255, 255, 255, 0.4); }
 
         .selection-indicator { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
         .selection-indicator svg { width: 12px; height: 12px; fill: white; opacity: 0; transition: 0.3s; }
-        .vote-btn.selected .selection-indicator { background: var(--accent); border-color: transparent; }
+        
+        .vote-btn.selected .selection-indicator { background: var(--accent); border-color: transparent; box-shadow: 0 0 10px var(--accent); }
         .vote-btn.selected .selection-indicator svg { opacity: 1; }
 
         .big-action-btn { background: var(--gradient); color: #fff; border: none; padding: 22px; width: 100%; border-radius: 100px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; transition: 0.3s; box-shadow: 0 15px 30px rgba(10, 132, 255, 0.4); }
