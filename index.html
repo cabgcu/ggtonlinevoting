@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>GGT Online Voting</title>
+    
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://www.gstatic.com">
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" async></script>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+      import { getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+      // 1. Firebase Configuration for gcu-s-got-talent-2026
+      const firebaseConfig = {
+        apiKey: "AIzaSyAsQeD83RdAyZPJZeAOif1gSasMhv2zp3M",
+        authDomain: "gcu-s-got-talent-2026.firebaseapp.com",
+        projectId: "gcu-s-got-talent-2026",
+        storageBucket: "gcu-s-got-talent-2026.firebasestorage.app",
+        messagingSenderId: "999052757013",
+        appId: "1:999052757013:web:3f75bdbf48f921b831a61c"
+      };
+
+      // Exact path where project data is managed
+      const appId = 'c_97156435f4eefd8e_importer.html-977';
+      
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const auth = getAuth(app);
+
+      let currentUser = null;
+      let votingOpen = true; 
+      let userName = "";
+      let selectedCandidate = null;
+
+      /**
+       * INITIALIZATION & AUTH
+       * Ensures authentication is complete before attempting any data reads.
+       */
+      async function boot() {
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth));
+          } else {
+            await signInAnonymously(auth);
+          }
+
+          onAuthStateChanged(auth, async (user) => {
+            if (user) {
+              currentUser = user;
+              setupLiveSync();
+              checkExistingVote();
+            }
+          });
+        } catch (error) {
+          console.error("Boot error:", error);
+        }
+      }
+
+      boot();
+
+      /**
+       * LIVE SYNC
+       * Listens to the Admin Dashboard toggle to open/close voting instantly.
+       */
+      function setupLiveSync() {
+        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'settings');
+        onSnapshot(settingsRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            votingOpen = data.open !== false;
+            const activeView = document.querySelector('.view.active')?.id;
+            
+            if (!votingOpen && activeView !== 'view-success') {
+              window.switchView('waiting');
+            } else if (votingOpen && activeView === 'view-waiting') {
+              window.switchView('name-entry');
+            }
+          }
+        }, (err) => console.warn("Sync error:", err.code));
+      }
+
+      /**
+       * DEVICE LOCK CHECK
+       * Uses the Firebase UID to verify if this specific device/browser has already voted.
+       */
+      async function checkExistingVote() {
+        if (!currentUser) return;
+        try {
+          const voteRef = doc(db, 'artifacts', appId, 'public', 'data', 'online_votes', currentUser.uid);
+          const voteDoc = await getDoc(voteRef);
+          if (voteDoc.exists()) {
+            window.switchView('success');
+          }
+        } catch (e) {
+          console.error("Lock check error:", e);
+        }
+      }
+
+      const contestants = [
+          { id: 1, name: "Canyon Avenue" }, { id: 2, name: "Emma Cowden" },
+          { id: 3, name: "Mallary Bauman" }, { id: 4, name: "Shae Dale" },
+          { id: 5, name: "SP31" }, { id: 6, name: "Suntwist" },
+          { id: 7, name: "Sydney Miller" }, { id: 8, name: "Tim Mullins" }
+      ].sort((a, b) => a.name.localeCompare(b.name));
+
+      window.switchView = function(viewId) {
+          const views = document.querySelectorAll('.view');
+          views.forEach(v => v.classList.remove('active'));
+          const target = document.getElementById(`view-${viewId}`);
+          if (target) target.classList.add('active');
+          window.scrollTo(0, 0);
+      };
+
+      window.validateName = function() {
+          const first = document.getElementById('first-name').value.trim();
+          const last = document.getElementById('last-name').value.trim();
+          const btn = document.getElementById('name-continue-btn');
+          btn.disabled = first.length < 2 || last.length < 2;
+      };
+
+      window.goToVoting = function() {
+          const first = document.getElementById('first-name').value.trim();
+          const last = document.getElementById('last-name').value.trim();
+          userName = `${first} ${last}`;
+          window.switchView('voting');
+      };
+
+      window.selectCandidate = function(id, el) {
+          selectedCandidate = id;
+          document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
+          el.classList.add('selected');
+          document.getElementById('submit-vote-btn').disabled = false;
+          if (window.navigator.vibrate) window.navigator.vibrate(10);
+      };
+
+      window.submitVote = async function() {
+          if(!selectedCandidate || !currentUser) return;
+
+          const btn = document.getElementById('submit-vote-btn');
+          btn.disabled = true;
+          btn.innerText = "SENDING...";
+
+          try {
+            // Using UID as the document ID for strict device locking
+            const voteRef = doc(db, 'artifacts', appId, 'public', 'data', 'online_votes', currentUser.uid);
+            
+            await setDoc(voteRef, {
+                voterName: userName,
+                performerId: selectedCandidate,
+                performerName: contestants.find(c => c.id === selectedCandidate).name,
+                voterUid: currentUser.uid,
+                timestamp: serverTimestamp(),
+                voteSource: "online"
+            });
+
+            window.switchView('success');
+            confetti({ 
+                particleCount: 150, 
+                spread: 70, 
+                origin: { y: 0.6 }, 
+                colors: ['#0A84FF', '#BF5AF2', '#ffffff'] 
+            });
+          } catch (error) {
+            console.error("Submission failed:", error);
+            btn.disabled = false;
+            btn.innerText = "CAST MY VOTE";
+            alert("Submission failed. Check your connection and try again.");
+          }
+      };
+
+      window.addEventListener('load', () => {
+          const grid = document.getElementById('contestant-list');
+          if (grid) {
+            grid.innerHTML = contestants.map((c, index) => `
+                <div class="vote-btn" onclick="selectCandidate(${c.id}, this)" style="animation-delay: ${index * 0.05}s">
+                    <div class="side-container">
+                        <div class="badge">${index + 1}</div>
+                    </div>
+                    <div class="contestant-info">
+                        <span class="contestant-name">${c.name}</span>
+                    </div>
+                    <div class="side-container end">
+                        <div class="selection-indicator">
+                            <svg viewBox="0 0 448 512"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+          }
+      });
+    </script>
+
+    <style>
+        :root {
+            --bg: #000;
+            --glass: rgba(10, 10, 14, 0.98); 
+            --border: rgba(255, 255, 255, 0.1);
+            --accent: #0A84FF;
+            --gradient: linear-gradient(135deg, #0A84FF 0%, #BF5AF2 100%);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        input { -webkit-user-select: auto; user-select: auto; }
+
+        body { 
+            margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif; 
+            color: white; background-color: var(--bg); 
+            min-height: 100vh; padding: 20px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-x: hidden;
+        }
+
+        #bg-container { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; 
+            background-image: radial-gradient(circle at 5% 5%, rgba(10, 132, 255, 0.12) 0%, transparent 45%), radial-gradient(circle at 95% 95%, rgba(191, 90, 242, 0.12) 0%, transparent 45%); 
+        }
+
+        .view { display: none; width: 100%; max-width: 420px; opacity: 0; transform: scale(0.98) translateY(10px); transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
+        .view.active { display: flex; flex-direction: column; opacity: 1; transform: scale(1) translateY(0); }
+
+        .glass-card { background: var(--glass); backdrop-filter: blur(40px); border: 1px solid var(--border); border-radius: 28px; padding: 35px 25px; box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 1); text-align: center; }
+
+        .input-group { margin-bottom: 20px; text-align: center; }
+        .input-label { display: block; font-size: 0.7rem; color: #999; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 800; margin-bottom: 8px; }
+        
+        .neon-input { width: 100%; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 18px; padding: 18px; color: white; font-size: 1.1rem; font-weight: 800; outline: none; transition: 0.3s; text-align: center; }
+        .neon-input:focus { border-color: var(--accent); background: rgba(10, 132, 255, 0.05); }
+
+        .contestant-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+
+        .vote-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; padding: 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.3s; user-select: none; }
+        .vote-btn.selected { background: rgba(255, 255, 255, 0.1); border-color: var(--accent); transform: scale(1.03); box-shadow: 0 0 30px rgba(10, 132, 255, 0.3); }
+
+        .side-container { width: 40px; display: flex; align-items: center; }
+        .side-container.end { justify-content: flex-end; }
+
+        .vote-btn .badge { width: 34px; height: 34px; border-radius: 12px; background: var(--gradient); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.95rem; color: white; }
+
+        .contestant-info { flex: 1; text-align: center; }
+        
+        /* High-Impact GGT Font for contestant names */
+        .contestant-name { 
+            font-weight: 900; 
+            font-size: 1.1rem; 
+            text-transform: uppercase; 
+            letter-spacing: -0.04em; 
+            color: white; 
+        }
+
+        .selection-indicator { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .selection-indicator svg { width: 12px; height: 12px; fill: white; opacity: 0; transition: 0.3s; }
+        .vote-btn.selected .selection-indicator { background: var(--accent); border-color: transparent; }
+        .vote-btn.selected .selection-indicator svg { opacity: 1; }
+
+        .big-action-btn { background: var(--gradient); color: #fff; border: none; padding: 22px; width: 100%; border-radius: 100px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; transition: 0.3s; box-shadow: 0 15px 30px rgba(10, 132, 255, 0.4); }
+        .big-action-btn:disabled { opacity: 0.15; cursor: not-allowed; filter: grayscale(1); }
+
+        h1 { margin: 0; font-size: 2.2rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1; text-transform: uppercase; color: white; }
+        .arena-tag { display: inline-flex; align-items: center; padding: 5px 14px; border-radius: 100px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #ffffff; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 30px; }
+        .footer-simple { margin-top: 32px; text-align: center; color: #ffffff; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+<div id="bg-container"></div>
+
+<!-- ================= WAITING ================= -->
+<div id="view-waiting" class="view">
+    <div class="glass-card">
+        <div style="font-size: 4rem; margin-bottom: 20px;">🔒</div>
+        <h1>Voting Closed</h1>
+        <p style="color: white; line-height: 1.6; font-size: 0.95rem; margin-top: 15px;">Voting is currently closed. Stay tuned for the winners!</p>
+    </div>
+    <div class="footer-simple">© 2026 Canyon Activities Board</div>
+</div>
+
+<!-- ================= NAME ENTRY ================= -->
+<div id="view-name-entry" class="view active">
+    <div style="text-align: center;">
+        <div class="arena-tag">
+            <span style="width: 6px; height: 6px; background: #ffffff; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 8px #ffffff;"></span>
+            GCU'S GOT TALENT 2026
+        </div>
+        <h1>GGT<br>VOTING</h1>
+        <p style="color: #999; font-size: 0.85rem; margin-top: 15px; margin-bottom: 35px; font-weight: 600;">Please enter your name to cast your ballot.</p>
+    </div>
+
+    <div class="glass-card">
+        <div class="input-group">
+            <label class="input-label">First Name</label>
+            <input type="text" id="first-name" class="neon-input" placeholder="Type here..." onkeyup="validateName()">
+        </div>
+        <div class="input-group">
+            <label class="input-label">Last Name</label>
+            <input type="text" id="last-name" class="neon-input" placeholder="Type here..." onkeyup="validateName()">
+        </div>
+        <button id="name-continue-btn" class="big-action-btn" onclick="goToVoting()" disabled>Start Voting</button>
+    </div>
+    <div class="footer-simple">© 2026 Canyon Activities Board</div>
+</div>
+
+<!-- ================= VOTING ================= -->
+<div id="view-voting" class="view">
+    <div style="text-align: center; margin-bottom: 25px; margin-top: 50px;">
+        <h1 style="font-size: 1.6rem;">Select A Performance</h1>
+    </div>
+    <div class="glass-card">
+        <div class="contestant-grid" id="contestant-list"></div>
+        <button id="submit-vote-btn" class="big-action-btn" onclick="submitVote()" disabled>Cast My Vote</button>
+    </div>
+    <div class="footer-simple">© 2026 Canyon Activities Board</div>
+</div>
+
+<!-- ================= SUCCESS ================= -->
+<div id="view-success" class="view">
+    <div class="glass-card">
+        <div style="width: 88px; height: 88px; background: var(--gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 10px auto 24px; box-shadow: 0 15px 35px rgba(10, 132, 255, 0.4);">
+            <svg style="width:40px; height:40px; fill:white;" viewBox="0 0 448 512"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
+        </div>
+        <h2>Vote Confirmed!</h2>
+        <p style="color: #999; font-size: 1.05rem; line-height: 1.5; margin-top: 10px;">Your choice has been recorded. Enjoy the show!</p>
+    </div>
+    <div class="footer-simple">© 2026 Canyon Activities Board</div>
+</div>
+
+</body>
+</html>
