@@ -223,7 +223,6 @@
 
         .vote-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; padding: 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); user-select: none; }
         
-        /* GLOWING PULSE EFFECT */
         .vote-btn.selected { 
             background: rgba(255, 255, 255, 0.1); 
             border-color: var(--accent); 
@@ -235,6 +234,21 @@
         @keyframes selectedGlowPulse {
             0%, 100% { box-shadow: 0 0 20px rgba(10, 132, 255, 0.3); border-color: var(--accent); }
             50% { box-shadow: 0 0 45px rgba(191, 90, 242, 0.6); border-color: var(--accent-purple); }
+        }
+
+        /* MATCHING STUDENT ID LOCK STYLES */
+        .waiting-icon-svg { 
+            width: 44px; height: 44px; 
+            fill: var(--accent); 
+            margin: 10px auto 18px; 
+            display: block;
+            animation: float-icon 3s ease-in-out infinite; 
+            filter: drop-shadow(0 0 10px rgba(10, 132, 255, 0.4));
+        }
+
+        @keyframes float-icon { 
+            0%, 100% { transform: translateY(0); } 
+            50% { transform: translateY(-10px); } 
         }
 
         .side-container { width: 40px; display: flex; align-items: center; }
@@ -275,7 +289,9 @@
 <!-- ================= WAITING ================= -->
 <div id="view-waiting" class="view">
     <div class="glass-card">
-        <div style="font-size: 4rem; margin-bottom: 20px;">🔒</div>
+        <svg class="waiting-icon-svg" viewBox="0 0 448 512">
+            <path d="M400 224h-24v-72C376 68.2 307.8 0 224 0S72 68.2 72 152v72H48c-26.5 0-48 21.5-48 48v192c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V272c0-26.5-21.5-48-48-48zm-104 0H152v-72c0-39.7 32.3-72 72-72s72 32.3 72 72v72z"/>
+        </svg>
         <h1>Voting Closed</h1>
         <p style="color: white; line-height: 1.6; font-size: 0.95rem; margin-top: 15px;">Voting is currently closed. Stay tuned for the winners!</p>
     </div>
