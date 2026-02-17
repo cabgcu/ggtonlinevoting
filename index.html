@@ -8,16 +8,14 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://www.gstatic.com">
     
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" async></script>
     
-    <!-- Firebase SDKs -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-      import { getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
       import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-      // 1. Firebase Configuration for gcu-s-got-talent-2026
+      // 1. Firebase Configuration
       const firebaseConfig = {
         apiKey: "AIzaSyAsQeD83RdAyZPJZeAOif1gSasMhv2zp3M",
         authDomain: "gcu-s-got-talent-2026.firebaseapp.com",
@@ -34,7 +32,6 @@
       const auth = getAuth(app);
 
       let currentUser = null;
-      let votingOpen = true; 
       let userName = "";
       let selectedCandidate = null;
 
@@ -49,8 +46,7 @@
           onAuthStateChanged(auth, async (user) => {
             if (user) {
               currentUser = user;
-              setupLiveSync();
-              checkExistingVote();
+              checkExistingVote(); // Single pull on load
             }
           });
         } catch (error) {
@@ -60,22 +56,7 @@
 
       boot();
 
-      function setupLiveSync() {
-        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'settings');
-        onSnapshot(settingsRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            votingOpen = data.open !== false;
-            const activeView = document.querySelector('.view.active')?.id;
-            
-            if (!votingOpen && activeView !== 'view-success') {
-              window.switchView('waiting');
-            } else if (votingOpen && activeView === 'view-waiting') {
-              window.switchView('name-entry');
-            }
-          }
-        }, (err) => console.warn("Sync error:", err.code));
-      }
+      // REMOVED setupLiveSync to prevent socket overhead
 
       async function checkExistingVote() {
         if (!currentUser) return;
@@ -112,11 +93,31 @@
           btn.disabled = first.length < 2 || last.length < 2;
       };
 
-      window.goToVoting = function() {
+      // Atomic Status Check when clicking "Start"
+      window.goToVoting = async function() {
+          const btn = document.getElementById('name-continue-btn');
           const first = document.getElementById('first-name').value.trim();
           const last = document.getElementById('last-name').value.trim();
-          userName = `${first} ${last}`;
-          window.switchView('voting');
+          
+          btn.disabled = true;
+          btn.innerText = "VERIFYING...";
+
+          try {
+            const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'settings');
+            const snap = await getDoc(settingsRef);
+            
+            if (snap.exists() && snap.data().open === false) {
+              window.switchView('waiting');
+              return;
+            }
+
+            userName = `${first} ${last}`;
+            window.switchView('voting');
+          } catch (e) {
+            btn.disabled = false;
+            btn.innerText = "START VOTING";
+            alert("Connection weak. Please try again.");
+          }
       };
 
       window.selectCandidate = function(id, el) {
@@ -147,12 +148,14 @@
             });
 
             window.switchView('success');
-            confetti({ 
-                particleCount: 150, 
-                spread: 70, 
-                origin: { y: 0.6 }, 
-                colors: ['#0A84FF', '#BF5AF2', '#ffffff'] 
-            });
+            if (typeof confetti === 'function') {
+                confetti({ 
+                    particleCount: 150, 
+                    spread: 70, 
+                    origin: { y: 0.6 }, 
+                    colors: ['#0A84FF', '#BF5AF2', '#ffffff'] 
+                });
+            }
           } catch (error) {
             console.error("Submission failed:", error);
             btn.disabled = false;
@@ -236,7 +239,6 @@
             50% { box-shadow: 0 0 45px rgba(191, 90, 242, 0.6); border-color: var(--accent-purple); }
         }
 
-        /* MATCHING STUDENT ID LOCK STYLES */
         .waiting-icon-svg { 
             width: 44px; height: 44px; 
             fill: var(--accent); 
@@ -286,7 +288,6 @@
 
 <div id="bg-container"></div>
 
-<!-- ================= WAITING ================= -->
 <div id="view-waiting" class="view">
     <div class="glass-card">
         <svg class="waiting-icon-svg" viewBox="0 0 448 512">
@@ -298,7 +299,6 @@
     <div class="footer-simple">© 2026 Canyon Activities Board</div>
 </div>
 
-<!-- ================= NAME ENTRY ================= -->
 <div id="view-name-entry" class="view active">
     <div style="text-align: center;">
         <div class="arena-tag">
@@ -323,7 +323,6 @@
     <div class="footer-simple">© 2026 Canyon Activities Board</div>
 </div>
 
-<!-- ================= VOTING ================= -->
 <div id="view-voting" class="view">
     <div style="text-align: center; margin-bottom: 25px; margin-top: 50px;">
         <h1 style="font-size: 1.6rem;">Select A Performance</h1>
@@ -335,7 +334,6 @@
     <div class="footer-simple">© 2026 Canyon Activities Board</div>
 </div>
 
-<!-- ================= SUCCESS ================= -->
 <div id="view-success" class="view">
     <div class="glass-card">
         <div style="width: 88px; height: 88px; background: var(--gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 10px auto 24px; box-shadow: 0 15px 35px rgba(10, 132, 255, 0.4);">
