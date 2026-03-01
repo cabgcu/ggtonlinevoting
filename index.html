@@ -71,12 +71,18 @@
         }
       }
 
+      // Updated contestant list matching the admin dashboard exactly
+      // Removed the alphabetical .sort() to strictly enforce this specific layout order
       const contestants = [
-          { id: 1, name: "Canyon Avenue" }, { id: 2, name: "Emma Cowden" },
-          { id: 3, name: "Mallary Bauman" }, { id: 4, name: "Shae Dale" },
-          { id: 5, name: "SP31" }, { id: 6, name: "Suntwist" },
-          { id: 7, name: "Sydney Miller" }, { id: 8, name: "Tim Mullins" }
-      ].sort((a, b) => a.name.localeCompare(b.name));
+          { id: 1, name: "Suntwist" },
+          { id: 2, name: "Mallary Bauman" },
+          { id: 3, name: "Shae Dale" },
+          { id: 4, name: "Canyon Avenue" },
+          { id: 5, name: "The GCU Magician" },
+          { id: 6, name: "Cowden" },
+          { id: 7, name: "SP31" },
+          { id: 8, name: "Sydney Miller" }
+      ];
 
       window.switchView = function(viewId) {
           const views = document.querySelectorAll('.view');
